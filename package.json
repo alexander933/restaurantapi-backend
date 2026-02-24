@@ -1,5 +1,5 @@
 {
-  "name": "restaurantappi-pnpm",
+  "name": "restaurantapi-backend",
   "version": "0.0.1",
   "description": "<p align=\"center\">\r   <a href=\"http://nestjs.com/\" target=\"blank\"><img src=\"https://nestjs.com/img/logo-small.svg\" width=\"120\" alt=\"Nest Logo\" /></a>\r </p>",
   "author": "",
@@ -104,7 +104,15 @@
   },
   "main": "index.js",
   "directories": {
-    "test": "test"
+    "test": "tests"
   },
-  "keywords": []
+  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexander933/restaurantapi-backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alexander933/restaurantapi-backend/issues"
+  },
+  "homepage": "https://github.com/alexander933/restaurantapi-backend#readme"
 }
