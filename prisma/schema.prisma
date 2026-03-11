@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// a. USERS — unifica empleados y clientes
+// ─────────────────────────────────────────
+model Users {
+  id         String   @id @default(uuid())
+  username   String   @unique
+  email      String   @unique
+  nombre     String
+  apellido   String
+  rol        Rol      @default(CLIENTE)  // ADMIN, MESERO, CLIENTE
+  activo     Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relaciones
+  permissions Users_permissions?
+  credentials Users_credentials?
+  logins      Users_logins[]
+}
+
+// ─────────────────────────────────────────
+// b. USERS_PERMISSIONS — qué puede hacer
+// ─────────────────────────────────────────
+model Users_permissions {
+  id             String  @id @default(uuid())
+  user_id        String  @unique
+  can_create     Boolean @default(false)
+  can_read       Boolean @default(true)
+  can_update     Boolean @default(false)
+  can_delete     Boolean @default(false)
+  can_admin      Boolean @default(false)
+
+  // Relación con Users
+  user Users @relation(fields: [user_id], references: [id])
+}
+
+// ─────────────────────────────────────────
+// c. USERS_CREDENTIALS — contraseña y tokens
+// ─────────────────────────────────────────
+model Users_credentials {
+  id                  String    @id @default(uuid())
+  user_id             String    @unique
+  password_hash       String
+  reset_token         String?   // para recuperar contraseña
+  reset_token_expiry  DateTime?
+  last_password_change DateTime @default(now())
+
+  // Relación con Users
+  user Users @relation(fields: [user_id], references: [id])
+}
+
+// ─────────────────────────────────────────
+// d. USERS_LOGINS — historial de accesos
+// ─────────────────────────────────────────
+model Users_logins {
+  id         String   @id @default(uuid())
+  user_id    String
+  ip_address String?
+  dispositivo String?
+  exitoso    Boolean  @default(true)  // true=login ok, false=intento fallido
+  fecha      DateTime @default(now())
+
+  // Relación con Users
+  user Users @relation(fields: [user_id], references: [id])
+}
+
+// ─────────────────────────────────────────
+// ENUM de roles
+// ─────────────────────────────────────────
+enum Rol {
+  ADMIN
+  MESERO
+  CLIENTE
+}
