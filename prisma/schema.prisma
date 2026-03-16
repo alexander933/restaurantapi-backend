@@ -14,10 +14,10 @@ model Users {
   id         String   @id @default(uuid())
   username   String   @unique
   email      String   @unique
-  nombre     String
-  apellido   String
-  rol        Rol      @default(CLIENTE)  // ADMIN, MESERO, CLIENTE
-  activo     Boolean  @default(true)
+  firstname  String
+  lastname   String
+  rol        Rol      @default(CUSTOMER)  // ADMIN, MESERO, CLIENTE
+  active     Boolean  @default(true)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -65,9 +65,9 @@ model Users_logins {
   id         String   @id @default(uuid())
   user_id    String
   ip_address String?
-  dispositivo String?
-  exitoso    Boolean  @default(true)  // true=login ok, false=intento fallido
-  fecha      DateTime @default(now())
+  Device     String?
+  successful Boolean  @default(true)  // true=login ok, false=intento fallido
+  date       DateTime @default(now())
 
   // Relación con Users
   user Users @relation(fields: [user_id], references: [id])
@@ -78,6 +78,6 @@ model Users_logins {
 // ─────────────────────────────────────────
 enum Rol {
   ADMIN
-  MESERO
-  CLIENTE
+  SERVER
+  CUSTOMER
 }
