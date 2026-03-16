@@ -31,8 +31,8 @@ export class UsersService {
       data: {
         username: data.username,
         email: data.email,
-        nombre: data.nombre,
-        apellido: data.apellido,
+        firstname : data.firstname ,
+        lastname : data.lastname ,
         rol: data.rol,
         credentials: {
           create: {
