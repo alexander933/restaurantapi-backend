@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ─────────────────────────────────────────
@@ -65,7 +64,7 @@ model Users_logins {
   id         String   @id @default(uuid())
   user_id    String
   ip_address String?
-  Device     String?
+  device     String?
   successful Boolean  @default(true)  // true=login ok, false=intento fallido
   date       DateTime @default(now())
 
