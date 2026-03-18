@@ -1,5 +1,6 @@
 import { Controller, Post, Patch, Body, UseGuards, Request } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
+import type { Request as ExpressRequest } from 'express'    // ✅ import type
 import { AuthService } from './auth.service'
 import {
   RegisterDto,
@@ -13,32 +14,27 @@ import {
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  // POST /auth/register
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto)
   }
 
-  // POST /auth/login
   @Post('login')
-  login(@Body() dto: LoginDto, @Request() req) {
+  login(@Body() dto: LoginDto, @Request() req: ExpressRequest) {
     return this.authService.login(dto, req)
   }
 
-  // PATCH /auth/change-password  🔒 JWT
   @UseGuards(AuthGuard('jwt'))
   @Patch('change-password')
-  changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+  changePassword(@Request() req: ExpressRequest & { user: any }, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(req.user.id, dto)
   }
 
-  // POST /auth/forgot-password
   @Post('forgot-password')
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto)
   }
 
-  // POST /auth/reset-password
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto)

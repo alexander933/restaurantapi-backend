@@ -1,16 +1,13 @@
-// prisma/prisma.service.ts
-import { Injectable, OnModuleInit } from '@nestjs/common'
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common'
 import { PrismaClient } from '@prisma/client'
-import { PrismaNeon } from '@prisma/adapter-neon'
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor() {
-    const adapter = new PrismaNeon(process.env.DATABASE_URL!)
-    super({ adapter })
-  }
-
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
     await this.$connect()
+  }
+
+  async onModuleDestroy() {
+    await this.$disconnect()
   }
 }
