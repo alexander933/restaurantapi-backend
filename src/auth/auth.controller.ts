@@ -1,14 +1,46 @@
-import { Controller, Post, Body } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { Controller, Post, Patch, Body, UseGuards, Request } from '@nestjs/common'
+import { AuthGuard } from '@nestjs/passport'
+import { AuthService } from './auth.service'
+import {
+  RegisterDto,
+  LoginDto,
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './auth.dto'
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private authService: AuthService) {}
 
+  // POST /auth/register
+  @Post('register')
+  register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto)
+  }
+
+  // POST /auth/login
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
-    console.log('Body completo recibido en controller:', loginDto);
-    return this.authService.login(loginDto);
+  login(@Body() dto: LoginDto, @Request() req) {
+    return this.authService.login(dto, req)
+  }
+
+  // PATCH /auth/change-password  🔒 JWT
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('change-password')
+  changePassword(@Request() req, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(req.user.id, dto)
+  }
+
+  // POST /auth/forgot-password
+  @Post('forgot-password')
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto)
+  }
+
+  // POST /auth/reset-password
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto)
   }
 }

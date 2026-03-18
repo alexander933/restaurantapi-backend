@@ -1,50 +1,156 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { LoginDto } from './dto/login.dto';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
+import { PrismaService } from '../prisma/prisma.service'
+import * as bcrypt from 'bcrypt'
+import {
+  RegisterDto,
+  LoginDto,
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './auth.dto'
+import { Request } from 'express'
+import * as crypto from 'crypto'
 
 @Injectable()
 export class AuthService {
-  private readonly users = [
-    {
-      id: '1',
-      username: 'admin',
-      email: 'admin@restaurante.com',
-      password: '123456',
-    },
-    {
-      id: '2',
-      username: 'mesero',
-      email: 'mesero@restaurante.com',
-      password: 'mesero123',
-    },
-  ];
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+  ) {}
 
-  async login(loginDto: LoginDto) {
-    const { identifier, password } = loginDto;
-    
-    // 🔍 DEBUG
-    console.log('========== DEBUG LOGIN ==========');
-    console.log('Identifier recibido:', identifier);
-    console.log('Password recibido:', password);
-    console.log('Tipo de identifier:', typeof identifier);
-    console.log('Tipo de password:', typeof password);
-    console.log('Usuarios disponibles:', this.users);
-    
-    const user = this.users.find(
-      (u) => (u.email === identifier || u.username === identifier) && u.password === password,
-    );
-    
-    console.log('Usuario encontrado:', user);
-    console.log('=================================');
-    
-    if (!user) {
-      throw new UnauthorizedException('Credenciales incorrectas');
+  // ─── REGISTER ───────────────────────────────────────────
+  async register(dto: RegisterDto) {
+    const exists = await this.prisma.users.findFirst({
+      where: { OR: [{ email: dto.email }, { username: dto.username }] },
+    })
+    if (exists) throw new BadRequestException('Email o username ya en uso')
+
+    const password_hash = await bcrypt.hash(dto.password, 12)
+
+    const user = await this.prisma.users.create({
+      data: {
+        username:  dto.username,
+        email:     dto.email,
+        firstname: dto.firstname,
+        lastname:  dto.lastname,
+        credentials: {
+          create: { password_hash }        // ← crea Users_credentials
+        },
+        permissions: {
+          create: {}                        // ← permisos por defecto
+        },
+      },
+    })
+
+    return { message: 'Usuario creado exitosamente', userId: user.id }
+  }
+
+  // ─── LOGIN ──────────────────────────────────────────────
+  async login(dto: LoginDto, req: Request) {
+    const ip     = req.ip
+    const device = req.headers['user-agent'] ?? null
+
+    const user = await this.prisma.users.findUnique({
+      where: { email: dto.email },
+      include: { credentials: true },
+    })
+
+    // Si no existe o está inactivo, registrar intento fallido igual
+    if (!user || !user.active || !user.credentials) {
+      if (user) {
+        await this.prisma.users_logins.create({
+          data: { user_id: user.id, ip_address: ip, device, successful: false },
+        })
+      }
+      throw new UnauthorizedException('Credenciales inválidas')
     }
-    
-    return {
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      token: 'fake-jwt-token-' + user.id,
-    };
+
+    const isValid = await bcrypt.compare(dto.password, user.credentials.password_hash)
+
+    // Registrar intento en historial
+    await this.prisma.users_logins.create({
+      data: { user_id: user.id, ip_address: ip, device, successful: isValid },
+    })
+
+    if (!isValid) throw new UnauthorizedException('Credenciales inválidas')
+
+    const token = this.jwt.sign({ sub: user.id, email: user.email })
+    return { access_token: token }
+  }
+
+  // ─── CHANGE PASSWORD ────────────────────────────────────
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const credentials = await this.prisma.users_credentials.findUnique({
+      where: { user_id: userId },
+    })
+    if (!credentials) throw new NotFoundException('Usuario no encontrado')
+
+    const isValid = await bcrypt.compare(dto.currentPassword, credentials.password_hash)
+    if (!isValid) throw new UnauthorizedException('Contraseña actual incorrecta')
+
+    const password_hash = await bcrypt.hash(dto.newPassword, 12)
+
+    await this.prisma.users_credentials.update({
+      where: { user_id: userId },
+      data:  { password_hash, last_password_change: new Date() },
+    })
+
+    return { message: 'Contraseña actualizada exitosamente' }
+  }
+
+  // ─── FORGOT PASSWORD (genera token de reset) ────────────
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.users.findUnique({ where: { email: dto.email } })
+
+    // Siempre responder igual (no revelar si el email existe)
+    if (!user) return { message: 'Si el email existe, recibirás instrucciones' }
+
+    const reset_token        = crypto.randomBytes(32).toString('hex')
+    const reset_token_expiry = new Date(Date.now() + 1000 * 60 * 30) // 30 min
+
+    await this.prisma.users_credentials.update({
+      where: { user_id: user.id },
+      data:  { reset_token, reset_token_expiry },
+    })
+
+    // TODO: aquí enviarías el email con el token
+    console.log(`Token de reset para ${dto.email}: ${reset_token}`)
+
+    return { message: 'Si el email existe, recibirás instrucciones' }
+  }
+
+  // ─── RESET PASSWORD (usa el token) ──────────────────────
+  async resetPassword(dto: ResetPasswordDto) {
+    const credentials = await this.prisma.users_credentials.findFirst({
+      where: { reset_token: dto.token },
+    })
+
+    if (!credentials || !credentials.reset_token_expiry) {
+      throw new BadRequestException('Token inválido')
+    }
+
+    if (credentials.reset_token_expiry < new Date()) {
+      throw new BadRequestException('Token expirado')
+    }
+
+    const password_hash = await bcrypt.hash(dto.newPassword, 12)
+
+    await this.prisma.users_credentials.update({
+      where: { id: credentials.id },
+      data: {
+        password_hash,
+        reset_token:          null,
+        reset_token_expiry:   null,
+        last_password_change: new Date(),
+      },
+    })
+
+    return { message: 'Contraseña restablecida exitosamente' }
   }
 }
