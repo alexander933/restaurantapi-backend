@@ -40,10 +40,10 @@ export class AuthService {
         firstname: dto.firstname,
         lastname:  dto.lastname,
         credentials: {
-          create: { password_hash }        // ← crea Users_credentials
+          create: { password_hash }
         },
         permissions: {
-          create: {}                        // ← permisos por defecto
+          create: {}
         },
       },
     })
@@ -57,11 +57,10 @@ export class AuthService {
     const device = req.headers['user-agent'] ?? null
 
     const user = await this.prisma.users.findUnique({
-      where: { email: dto.email },
+      where:   { username: dto.username },
       include: { credentials: true },
     })
 
-    // Si no existe o está inactivo, registrar intento fallido igual
     if (!user || !user.active || !user.credentials) {
       if (user) {
         await this.prisma.users_logins.create({
@@ -73,7 +72,6 @@ export class AuthService {
 
     const isValid = await bcrypt.compare(dto.password, user.credentials.password_hash)
 
-    // Registrar intento en historial
     await this.prisma.users_logins.create({
       data: { user_id: user.id, ip_address: ip, device, successful: isValid },
     })
@@ -104,28 +102,26 @@ export class AuthService {
     return { message: 'Contraseña actualizada exitosamente' }
   }
 
-  // ─── FORGOT PASSWORD (genera token de reset) ────────────
+  // ─── FORGOT PASSWORD ────────────────────────────────────
   async forgotPassword(dto: ForgotPasswordDto) {
     const user = await this.prisma.users.findUnique({ where: { email: dto.email } })
 
-    // Siempre responder igual (no revelar si el email existe)
     if (!user) return { message: 'Si el email existe, recibirás instrucciones' }
 
     const reset_token        = crypto.randomBytes(32).toString('hex')
-    const reset_token_expiry = new Date(Date.now() + 1000 * 60 * 30) // 30 min
+    const reset_token_expiry = new Date(Date.now() + 1000 * 60 * 30)
 
     await this.prisma.users_credentials.update({
       where: { user_id: user.id },
       data:  { reset_token, reset_token_expiry },
     })
 
-    // TODO: aquí enviarías el email con el token
     console.log(`Token de reset para ${dto.email}: ${reset_token}`)
 
     return { message: 'Si el email existe, recibirás instrucciones' }
   }
 
-  // ─── RESET PASSWORD (usa el token) ──────────────────────
+  // ─── RESET PASSWORD ─────────────────────────────────────
   async resetPassword(dto: ResetPasswordDto) {
     const credentials = await this.prisma.users_credentials.findFirst({
       where: { reset_token: dto.token },
